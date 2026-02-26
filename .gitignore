@@ -1,0 +1,19 @@
+# Data and Large Objects
+data/
+results/
+*.h5ad
+*.rds
+*.h5seurat
+*.mtx
+*.csv
+
+# Python/R Environment
+__pycache__/
+.venv/
+.Rhistory
+.RData
+
+# Pipeline/HPC
+.nextflow/
+work/
+.nextflow.log*
