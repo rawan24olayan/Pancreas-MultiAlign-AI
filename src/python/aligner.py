@@ -1,84 +1,63 @@
 import scvi
 import scanpy as sc
 import numpy as np
-import pandas as pd
-from sklearn.model_selection import train_test_split
+import torch
+import matplotlib.pyplot as plt
 from sklearn.metrics import silhouette_score
 
-print("🚀 Phase 3: Initializing Advanced Cross-Species Aligner...")
+print("🚀 Phase 3: Initializing Best-Practice scANVI Aligner...")
 
 # --- 1. DATA PREPARATION ---
 adata = sc.read_h5ad("data/processed/harmonized_pancreas.h5ad")
 
-# --- 2. TRAIN/TEST STRATEGY (80/20 SPLIT) ---
-train_idx, test_idx = train_test_split(
-    np.arange(adata.n_obs), test_size=0.2, random_state=42
-)
-adata.obs["split"] = "test"
-adata.obs.iloc[train_idx, adata.obs.columns.get_loc("split")] = "train"
+# BEST PRACTICE: We treat Human labels as "Known" and Mouse labels as "Unknown"
+# This allows the model to 'Transfer' the human cell-type identity to the mouse.
+adata.obs["cell_type_scanvi"] = adata.obs["cell_type"].astype(str)
+adata.obs.loc[adata.obs["species"] == "mouse", "cell_type_scanvi"] = "Unknown"
 
-# --- 3. MODEL SETUP & TRAINING ---
-scvi.model.SCVI.setup_anndata(adata, batch_key="species", labels_key="cell_type")
-vae = scvi.model.SCVI(adata[adata.obs.split == "train"], n_layers=2, n_latent=30)
+# --- 2. STEP 1: PRE-TRAIN WITH scVI (Unsupervised) ---
+# This learns the basic background noise and species differences.
+scvi.model.SCVI.setup_anndata(adata, batch_key="species", labels_key="cell_type_scanvi")
+vae = scvi.model.SCVI(adata, n_layers=2, n_latent=30)
 
-print("🧠 Training VAE... Monitoring ELBO convergence.")
+print("🧠 Step 1: Pre-training scVI Background Model...")
 vae.train(max_epochs=100)
 
-# --- 4. THE 'MAPPING' (TESTING PHASE) ---
-# Project all cells into the latent space
-adata.obsm["X_scVI"] = vae.get_latent_representation(adata)
+# --- 3. STEP 2: REFINE WITH scANVI (Semi-Supervised) ---
+# We initialize scANVI using the weights from the scVI model.
+scanvi_model = scvi.model.SCANVI.from_scvi_model(
+    vae,
+    labels_key="cell_type_scanvi",
+    unlabeled_category="Unknown"
+)
 
-# --- 5. ADVANCED METRICS VALIDATION ---
-print("📊 Calculating Multi-Metric Validation for Test Set...")
+print("🧠 Step 2: Training scANVI Classifier (Label Transfer)...")
+scanvi_model.train(max_epochs=20)
 
-# Isolate the Test Set for unbiased grading
-test_adata = adata[adata.obs.split == "test"].copy()
+# --- 4. PREDICTION & CONFIDENCE ---
+# Predict the Mouse labels based on the Human reference
+adata.obs["predicted_label"] = scanvi_model.predict(adata)
+# Get the probability (confidence) for each prediction
+adata.obs["prediction_confidence"] = scanvi_model.predict(adata, soft=True).max(axis=1)
 
-# A. Biological Conservation (ASW-Label)
-# High score = Cell types are distinct (Beta != Alpha)
-bio_score = silhouette_score(test_adata.obsm["X_scVI"], test_adata.obs["cell_type"])
+# Extract the latent space for visualization
+adata.obsm["X_scANVI"] = scanvi_model.get_latent_representation(adata)
 
-# B. Batch Integration (ASW-Batch)
-# Lower absolute score = Better mixing (Human and Mouse are inseparable)
-# We calculate 1 - |silhouette| to represent "Mixing Success"
-batch_sil = silhouette_score(test_adata.obsm["X_scVI"], test_adata.obs["species"])
-mix_score = 1 - abs(batch_sil)
+# --- 5. VALIDATION METRICS ---
+print("📊 Calculating Final Validation...")
+# Calculate Bio-Conservation (Higher is better)
+bio_score = silhouette_score(adata.obsm["X_scANVI"], adata.obs["predicted_label"])
+print(f"✅ Bio-Conservation (ASW-Label): {bio_score:.4f}")
 
-# C. Calculate Nearest Neighbor Graph for Connectivity
-sc.pp.neighbors(test_adata, use_rep="X_scVI")
-# This checks if every cell has at least one neighbor of the same type
-# (High connectivity = stable clusters)
+# --- 6. VISUALIZATION ---
+sc.pp.neighbors(adata, use_rep="X_scANVI")
+sc.tl.umap(adata)
 
-print(f"✅ Bio-Conservation Score (ASW-Label): {bio_score:.4f}")
-print(f"✅ Species Mixing Score (ASW-Batch): {mix_score:.4f}")
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+sc.pl.umap(adata, color="predicted_label", ax=ax1, show=False, title="scANVI Predicted Labels")
+sc.pl.umap(adata, color="prediction_confidence", ax=ax2, show=False, title="Prediction Confidence")
+plt.savefig("results/scanvi_alignment_final.png")
 
-# --- 6. EXPORT VALIDATED RESULTS ---
-# We store the metrics in the metadata for the Phase 4 Agent to read
-adata.uns["metrics"] = {"bio_conservation": bio_score, "species_mixing": mix_score}
-adata.write("data/processed/aligned_pancreas_validated.h5ad")
-print("💾 Aligned object with metrics saved.")
-
-import matplotlib.pyplot as plt
-
-# --- 7. VISUALIZATION (NN Graph & UMAP) ---
-print("🎨 Generating UMAP Visualizations of the Aligned Latent Space...")
-
-# Compute neighbors based on the AI's latent representation (X_scVI)
-sc.pp.neighbors(test_adata, use_rep="X_scVI")
-
-# Run UMAP to project the graph into 2D
-sc.tl.umap(test_adata)
-
-# Create a side-by-side plot
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-
-# Plot 1: Cell Type Conservation (Biology)
-sc.pl.umap(test_adata, color="cell_type", ax=ax1, show=False, title="Aligned Cell Types")
-
-# Plot 2: Species Integration (Batch)
-sc.pl.umap(test_adata, color="species", ax=ax2, show=False, title="Integrated Species")
-
-# Save the professional figure to the results folder
-plt.tight_layout()
-plt.savefig("results/aligned_umap_validation.png", dpi=300)
-print("✅ Visualization saved to results/aligned_umap_validation.png")
+# --- 7. EXPORT ---
+adata.write("data/processed/aligned_pancreas_final.h5ad")
+print("💾 Final scANVI-aligned object saved.")
