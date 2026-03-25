@@ -1,19 +1,38 @@
-# Data and Large Objects
-data/
-results/
-*.h5ad
-*.rds
-*.h5seurat
-*.mtx
-*.csv
-
-# Python/R Environment
+# --- Python & Environment ---
 __pycache__/
-.venv/
-.Rhistory
-.RData
+*.py[cod]
+*$py.class
+.env
+venv/
+.ipynb_checkpoints/
+.pytest_cache/
 
-# Pipeline/HPC
-.nextflow/
-work/
-.nextflow.log*
+# --- Conda & Package Managers ---
+.conda/
+.python-version
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- Bioinformatics Data (CRITICAL) ---
+# We keep the folder structure but ignore the heavy binary files
+data/raw/*.h5ad
+data/raw/*.csv
+data/processed/*.h5ad
+data/processed/*.csv
+data/interim/
+
+# --- Machine Learning Models ---
+# Ignore scVI/scANVI model weights (they can be several GBs)
+models/
+*.pt
+*.pth
+
+# --- Results & Reports ---
+# Usually, you want to keep the final CSV/PDF reports but ignore 
+# temporary plots or massive log files.
+results/plots/
+*.log
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
