@@ -51,4 +51,4 @@ if __name__ == "__main__":
     # Ensure paths match your run_pipeline.sh
     IN_FILE = "data/processed/harmonized_pancreas.h5ad"
     OUT_FILE = "data/processed/aligned_pancreas_final.h5ad"
-    run_scanvi_alignment(IN_FILE, OUT
+    run_scanvi_alignment(IN_FILE, OUT_FILE)
