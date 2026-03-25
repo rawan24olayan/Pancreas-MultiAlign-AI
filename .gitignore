@@ -15,11 +15,11 @@ pip-delete-this-directory.txt
 
 # --- Bioinformatics Data (CRITICAL) ---
 # We keep the folder structure but ignore the heavy binary files
-data/raw/*.h5ad
-data/raw/*.csv
-data/processed/*.h5ad
-data/processed/*.csv
-data/interim/
+#data/raw/*.h5ad
+#data/raw/*.csv
+#data/processed/*.h5ad
+#data/processed/*.csv
+#data/interim/
 
 # --- Machine Learning Models ---
 # Ignore scVI/scANVI model weights (they can be several GBs)
