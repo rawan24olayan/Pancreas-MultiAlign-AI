@@ -1,0 +1,5 @@
+BENGAL Phase 2 QC Report
+-----------------------
+Batch Mixing (Species ASW): -0.0039
+Label Separation (Biology ASW): 0.0483
+Mean Prediction Confidence: 0.9784
